@@ -66,7 +66,7 @@ def test_normalization():
     t = rows[0]
     assert t.month == "2026-07" and t.sale_type == "Resale"
     assert t.area_sqft == pytest.approx(1539.25, abs=0.01)
-    assert t.psf == pytest.approx(2268888 / (143 * 10.764), abs=0.01)
+    assert t.psf == pytest.approx(2268888 / round(143 * 10.764, 2), abs=0.01)
     assert (t.freehold, t.lease_years, t.lease_start) == (False, 99, 2008)
     landed = rows[-1]
     assert landed.floor_range is None and landed.freehold and landed.lat is None
@@ -180,6 +180,15 @@ def test_export_reproduces_a_real_eservice_row(tmp_path):
             r["Area (SQM)"], r["Unit Price ($ PSM)"], r["Floor Level"], r["Type of Sale"]) == \
         ("2,066,700", "828.83", "2,494", "77", "26,840", "21 to 25", "New Sale")
     assert rows["X"]["Area (SQFT)"] == "1,194.8"        # trailing zero dropped, as eservice does
+
+
+def test_psf_is_price_over_rounded_sqft_like_eservice():
+    [t] = schema.transactions_from_api([{"project": "KOVAN REGENCY", "street": "KOVAN RISE",
+        "transaction": [{"area": "83", "floorRange": "01-05", "noOfUnits": "1",
+                         "contractDate": "0526", "typeOfSale": "3", "price": "1580000",
+                         "propertyType": "Condominium", "district": "19",
+                         "typeOfArea": "Strata", "tenure": "Freehold"}]}])
+    assert t.area_sqft == 893.41 and round(t.psf) == 1769     # eservice: 893.41, 1,769
 
 
 def test_listings_import_persists_and_checks_against_comps(store, tmp_path, capsys, monkeypatch):
