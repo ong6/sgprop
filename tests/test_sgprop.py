@@ -188,7 +188,8 @@ def test_psf_is_price_over_rounded_sqft_like_eservice():
                          "contractDate": "0526", "typeOfSale": "3", "price": "1580000",
                          "propertyType": "Condominium", "district": "19",
                          "typeOfArea": "Strata", "tenure": "Freehold"}]}])
-    assert t.area_sqft == 893.41 and round(t.psf) == 1769     # eservice: 893.41, 1,769
+    assert t.area_sqft == 893.41 and export._money(t.psf) == "1,769"   # eservice: 893.41, 1,769
+    assert export._money(2.5) == "3" and export._money(1234.5) == "1,235"
 
 
 def test_listings_import_persists_and_checks_against_comps(store, tmp_path, capsys, monkeypatch):

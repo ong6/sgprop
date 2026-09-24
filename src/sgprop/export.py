@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 from datetime import datetime
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 from .schema import SEGMENTS
@@ -32,7 +33,10 @@ def _mon(month: str) -> str:
 
 
 def _money(v: float, dp: int = 0) -> str:
-    return f"{v:,.{dp}f}"
+    """Half-up, as URA rounds (1768.5039 and 1768.50 both -> '1,769');
+    Python's own rounding is half-to-even."""
+    q = Decimal(repr(v)).quantize(Decimal(1).scaleb(-dp), rounding=ROUND_HALF_UP)
+    return f"{q:,.{dp}f}"
 
 
 def _sqft(v: float) -> str:

@@ -37,7 +37,7 @@ def comps(store: Store, project: str, sqft: float | None = None,
     this format actually clears for? `sqft` narrows to +/- `tolerance`.
     """
     since = _months_ago(months)
-    sql = ("SELECT month, price, area_sqft, psf, floor_range, sale_type FROM transactions "
+    sql = ("SELECT month, price, area_sqft, ROUND(psf, 2) psf, floor_range, sale_type FROM transactions "
            "WHERE project = ? AND month >= ? AND sale_type IN (%s)"
            % ",".join("?" * len(sale_types)))
     params: list = [project.upper(), since, *sale_types]

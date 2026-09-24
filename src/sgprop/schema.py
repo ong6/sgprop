@@ -145,7 +145,7 @@ def transactions_from_api(result: list[dict]) -> list[Transaction]:
                 area_sqft=sqft,
                 # A bulk purchase reports total price and total area, so psf
                 # is still price / area.
-                psf=round(price / sqft, 2),
+                psf=price / sqft,         # unrounded; export rounds half-up like URA
                 floor_range=None if floor in (None, "", "-") else floor,
                 units=units,
                 tenure=t.get("tenure", ""),
