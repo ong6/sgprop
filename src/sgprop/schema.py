@@ -2,7 +2,8 @@
 
 Raw -> normalized rules, applied once here so every consumer agrees:
 
-* area arrives in sqm; sqft = sqm * 10.7639 and psf is computed from it
+* area arrives in sqm; sqft = sqm * 10.764 and psf = price / sqft — URA's own
+  factor, so sqft and psf agree with URA's published figures to the cent
 * contractDate / leaseDate arrive as MMYY; stored as ``YYYY-MM``
 * typeOfSale 1/2/3 -> "New Sale" / "Sub Sale" / "Resale"
 * tenure is kept verbatim, plus ``lease_start`` (year) and ``freehold``
@@ -14,7 +15,9 @@ from __future__ import annotations
 import re
 from dataclasses import asdict, dataclass
 
-SQFT_PER_SQM = 10.7639
+# URA's eservice uses 10.764, not the exact 10.7639: checked on 3,000 D19
+# rows, every "Area (SQFT)" and "Unit Price ($ PSF)" matches 10.764 exactly.
+SQFT_PER_SQM = 10.764
 
 SALE_TYPES = {"1": "New Sale", "2": "Sub Sale", "3": "Resale"}
 SEGMENTS = {"CCR": "Core Central Region", "RCR": "Rest of Central Region",

@@ -70,6 +70,27 @@ def ask_vs_comps(store: Store, project: str, sqft: float, ask_price: float,
     return out
 
 
+def check_listings(store: Store, source: str | None = None,
+                   months: int = 24) -> list[dict]:
+    """Every stored listing against its own project's same-size prints.
+
+    Sorted cheapest-vs-comps first: the listings worth a closer look lead.
+    Listings whose project has fewer than 3 same-size prints are kept but
+    flagged `thin`, since a median of two sales is not a price.
+    """
+    sql, params = "SELECT * FROM listings", ()
+    if source:
+        sql, params = sql + " WHERE source = ?", (source,)
+    out = []
+    for l in store.query(sql, params):
+        c = ask_vs_comps(store, l["project"], l["sqft"], l["price"], months=months)
+        out.append({"source": l["source"], "listing_id": l["listing_id"],
+                    "project": l["project"], "bedrooms": l["bedrooms"],
+                    "price": l["price"], "sqft": l["sqft"], "url": l["url"],
+                    **c, "thin": c["prints"] < 3})
+    return sorted(out, key=lambda r: (r["thin"], r.get("premium_vs_median_pct", 1e9)))
+
+
 def rent_evidence(store: Store, project: str, bedrooms: int | None = None,
                   months: int = 12) -> dict:
     since = _months_ago(months)

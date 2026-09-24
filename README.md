@@ -31,8 +31,9 @@ calls: four for transactions, one per rental quarter.
 | Rental contracts: rent, bedrooms, area band | URA `PMI_Resi_Rental` | 15th monthly |
 | Project coordinates | URA (SVY21), converted to lat/lon offline | with the above |
 
-`sgprop sync` checks URA's publish schedule and does nothing if the store is
-already current (`--force` overrides). URA revises older records, so each sync
+`sgprop sync` checks URA's publish schedule (sales Tue/Fri, rentals the 15th,
+counted from 18:00) and does nothing if the store is already current
+(`--force` overrides). A sync that fails partway is never recorded as current. URA revises older records, so each sync
 replaces what it fetched instead of appending.
 
 ## Setup
@@ -61,11 +62,13 @@ Data lives in `~/.cache/sgprop/sgprop.db` (`SGPROP_HOME` or `--db` to move it).
 | `sgprop comps PROJECT --sqft N --ask PRICE` | is this ask above what the format clears for? |
 | `sgprop rent PROJECT [--beds 3]` | median rent and contract count |
 | `sgprop trend PROJECT` | median psf per year |
-| `sgprop export transactions\|rentals --out DIR` | URA-eservice-format CSVs per district, for tools built on the old download |
-| `sgprop listings import FILE` | load your own listings (CSV/JSON) |
+| `sgprop export transactions\|rentals --out DIR [--ec]` | URA-eservice-format CSVs per district, byte-compatible with the old download (`--ec` adds `*_EC.csv`) |
+| `sgprop listings import FILE [--source NAME]` | store your own listings (CSV/JSON); a re-import replaces that source |
+| `sgprop listings check` | every stored ask vs its own format's prints, cheapest first |
+| `sgprop listings adapters` | installed listing plugins |
 
-Add `--json` to `projects` and `comps` for machine-readable output (the other
-commands always print JSON). For anything else, the store is plain SQLite:
+Add `--json` to `projects`, `comps` and `listings check` for machine-readable
+output (the other commands always print JSON). For anything else, the store is plain SQLite:
 `sqlite3 ~/.cache/sgprop/sgprop.db "SELECT ..."`.
 
 ## Listings (asking prices)
@@ -74,7 +77,9 @@ No Singapore portal has a public listings API, and the major portals'
 terms prohibit automated collection. **sgprop ships no portal scraper.** It
 defines a `Listing` record and a plugin hook instead:
 
-- import a file you collected yourself: `sgprop listings import mine.csv`
+- import a file you collected yourself, then price it: `sgprop listings import mine.csv &&
+  sgprop listings check`. Columns: `project, price, sqft` required; `listing_id,
+  bedrooms, district, floor_level, tenure, listed_on, url` optional.
 - or install your own adapter, exposed under the `sgprop.listings` entry point:
 
   ```toml
@@ -83,6 +88,15 @@ defines a `Listing` record and a plugin hook instead:
   ```
 
 Whatever you plug in, its terms of use are yours to respect.
+
+## Development
+
+```bash
+git clone https://github.com/ong6/sgprop && cd sgprop
+python -m venv .venv && .venv/bin/pip install -e '.[dev]' && .venv/bin/pytest -q
+```
+
+Tests are offline. CI runs them on Python 3.10–3.13.
 
 ## For agents
 

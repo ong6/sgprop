@@ -35,6 +35,12 @@ def _money(v: float, dp: int = 0) -> str:
     return f"{v:,.{dp}f}"
 
 
+def _sqft(v: float) -> str:
+    """1194.80 -> '1,194.8', 538.20 -> '538.2', 1033.34 -> '1,033.34' (eservice style)."""
+    s = f"{v:,.2f}"
+    return s.rstrip("0").rstrip(".") if "." in s else s
+
+
 def _floor(fr: str | None) -> str:
     return "-" if not fr else fr.replace("-", " to ")
 
@@ -51,10 +57,9 @@ def transactions_csv(store: Store, district: int, path: Path,
         w.writerow(TX_HEADER)
         for r in rows:
             w.writerow([
-                r["project"], _money(r["price"]), _money(r["area_sqft"], 2), _money(r["psf"]),
+                r["project"], _money(r["price"]), _sqft(r["area_sqft"]), _money(r["psf"]),
                 _mon(r["month"]), r["street"], r["sale_type"], r["type_of_area"],
-                _money(r["area_sqm"], 0) if float(r["area_sqm"]).is_integer()
-                else _money(r["area_sqm"], 1),
+                _sqft(r["area_sqm"]),
                 _money(r["price"] / r["area_sqm"]),
                 _money(r["nett_price"]) if r["nett_price"] else "-",
                 r["property_type"], r["units"], r["tenure"], r["district"],

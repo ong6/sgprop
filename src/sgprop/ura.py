@@ -12,6 +12,7 @@ end users, so don't ship a key inside a client-side product.
 from __future__ import annotations
 
 import json
+import os
 import time
 import urllib.error
 import urllib.request
@@ -44,15 +45,15 @@ def _get_json(url: str, headers: dict, timeout: float = 120, retries: int = 3) -
             except UnicodeDecodeError:
                 # Accented project names (ENCHANTÉ) arrive as Windows-1252.
                 return json.loads(raw.decode("cp1252"))
+        except urllib.error.HTTPError as e:
+            if 400 <= e.code < 500:        # bad key / bad request: retrying won't help
+                raise UraError(f"GET {url.split('?')[0]}: HTTP {e.code} {e.reason}") from e
+            last = e
+            time.sleep(2 * (attempt + 1))
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
             last = e
             time.sleep(2 * (attempt + 1))
     raise UraError(f"GET {url.split('?')[0]} failed after {retries} tries: {last}")
-
-
-def quarter(d: date) -> str:
-    """date -> URA refPeriod, e.g. 2026-05-01 -> '26q2'."""
-    return f"{d.year % 100:02d}q{(d.month - 1) // 3 + 1}"
 
 
 def recent_quarters(n: int, today: date | None = None) -> list[str]:
@@ -91,8 +92,9 @@ class UraClient:
             raise UraError(f"token request refused: {data.get('Message') or data}")
         self._token = data["Result"]
         self.token_cache.parent.mkdir(parents=True, exist_ok=True)
-        self.token_cache.write_text(json.dumps({"date": today, "token": self._token}))
-        self.token_cache.chmod(0o600)
+        fd = os.open(self.token_cache, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump({"date": today, "token": self._token}, f)
         return self._token
 
     def call(self, service: str, **params) -> list[dict]:
@@ -132,23 +134,29 @@ class UraClient:
         return self.call("PMI_Resi_Developer_Sales", refPeriod=ref_period)
 
 
+# URA doesn't say what time of day it publishes. Treat a publish day's data as
+# landing at this hour: a sync earlier that day is NOT counted as current, so
+# the next sync after it re-fetches. Errs toward re-syncing, never toward
+# believing a pre-publish sync is fresh.
+PUBLISH_HOUR = 18
+
+
 def last_publish(kind: str, now: datetime | None = None) -> datetime:
     """When URA last published `kind` ('transactions' Tue/Fri, 'rentals' the 15th).
 
-    Used to skip a sync when the store is already newer than URA's data.
-    Publication is taken as midnight of the publish day, which errs toward
-    re-syncing.
+    A sync is current only if it ran after this moment.
     """
     now = now or datetime.now()
-    day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    at = now.replace(hour=PUBLISH_HOUR, minute=0, second=0, microsecond=0)
     if kind == "transactions":
-        for back in range(7):
-            d = day.fromordinal(day.toordinal() - back)
-            if d.weekday() in (1, 4):          # Tuesday, Friday
+        for back in range(8):
+            d = datetime.fromordinal(at.toordinal() - back).replace(hour=PUBLISH_HOUR)
+            if d.weekday() in (1, 4) and d <= now:      # Tuesday, Friday
                 return d
     if kind == "rentals":
-        if now.day >= 15:
-            return day.replace(day=15)
-        prev = day.replace(day=1).fromordinal(day.replace(day=1).toordinal() - 1)
-        return prev.replace(day=15)
+        d = at.replace(day=15)
+        if d > now:
+            first = at.replace(day=1)
+            d = datetime.fromordinal(first.toordinal() - 1).replace(day=15, hour=PUBLISH_HOUR)
+        return d
     raise ValueError(kind)

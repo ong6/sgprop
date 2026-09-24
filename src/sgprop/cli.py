@@ -98,8 +98,27 @@ def cmd_listings(a) -> int:
     if a.action == "adapters":
         _out(sorted(listings.adapters()), True)
         return 0
-    rows = [l.to_dict() for l in listings.import_file(a.file)]
-    _out(rows, True)
+    store = Store(a.db)
+    if a.action == "check":
+        rows = analysis.check_listings(store, source=a.source, months=a.months)
+        text = "\n".join(
+            f"{r['project']:<32} {r['sqft']:>6,.0f} sqft ${r['ask_psf']:>6,} psf  "
+            + (f"{r['premium_vs_median_pct']:+6.1f}% vs {r['prints']} prints"
+               if r["prints"] else "no same-size prints")
+            + ("  (thin)" if r["thin"] and r["prints"] else "")
+            for r in rows)
+        _out(rows, a.json, text or "no listings stored — run `sgprop listings import FILE`")
+        return 0
+    if not a.file:
+        print("sgprop: listings import needs a FILE (CSV or JSON)", file=sys.stderr)
+        return 2
+    rows = listings.import_file(a.file)
+    source = a.source or Path(a.file).stem
+    for r in rows:
+        r.source = source
+        r.project = r.project.upper()
+    store.replace_listings(source, rows)
+    _out({"source": source, "imported": len(rows)}, True)
     return 0
 
 
@@ -149,9 +168,12 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--ec", action="store_true", help="also write *_EC.csv files")
     s.set_defaults(fn=cmd_export)
 
-    s = sub.add_parser("listings", help="listings: import a file, or list installed adapters")
-    s.add_argument("action", choices=["import", "adapters"])
-    s.add_argument("file", nargs="?")
+    s = sub.add_parser("listings", help="import your listings, check asks vs comps, list adapters")
+    s.add_argument("action", choices=["import", "check", "adapters"])
+    s.add_argument("file", nargs="?", help="CSV or JSON to import")
+    s.add_argument("--source", help="name for this batch (default: file name)")
+    s.add_argument("--months", type=int, default=24)
+    s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_listings)
 
     a = p.parse_args(argv)

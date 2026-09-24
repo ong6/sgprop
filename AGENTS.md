@@ -19,6 +19,7 @@ rental records. Use it instead of browsing portals for transaction evidence.
 | What did this size sell for, by floor, recently? | `sgprop comps "<PROJECT>" --sqft <sqft> --json` |
 | What does a unit like this rent for? | `sgprop rent "<PROJECT>" --beds <n>` |
 | Is the project's psf rising or flat? | `sgprop trend "<PROJECT>"` |
+| Which of these listings are cheap vs their own comps? | `sgprop listings import file.csv && sgprop listings check --json` |
 | Anything else | `sqlite3 ~/.cache/sgprop/sgprop.db` over `transactions` / `rentals` |
 
 ## Reading the fields

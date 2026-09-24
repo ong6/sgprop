@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import config
+from .listings import Listing
 from .schema import Rental, Transaction
 
 _TYPES = {int: "INTEGER", float: "REAL", str: "TEXT", bool: "INTEGER"}
@@ -28,13 +29,15 @@ def _columns(cls) -> list[tuple[str, str]]:
     return out
 
 
-TABLES = {"transactions": Transaction, "rentals": Rental}
+TABLES = {"transactions": Transaction, "rentals": Rental, "listings": Listing}
 
 
 class Store:
     def __init__(self, path: Path | str | None = None):
         self.path = Path(path) if path else config.data_dir() / "sgprop.db"
-        self.db = sqlite3.connect(self.path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        # Two syncs at once wait for each other instead of failing on a lock.
+        self.db = sqlite3.connect(self.path, timeout=60)
         self.db.row_factory = sqlite3.Row
         for name, cls in TABLES.items():
             cols = ", ".join(f"{n} {t}" for n, t in _columns(cls))
@@ -66,7 +69,18 @@ class Store:
         with self.db:
             self.db.executemany("DELETE FROM rentals WHERE month = ?", [(m,) for m in months])
             self._insert("rentals", rows)
-            self._set_meta("rentals_synced_at", datetime.now().isoformat(timespec="seconds"))
+
+    def replace_listings(self, source: str, rows: list[Listing]) -> None:
+        """Replace one source's listings: a re-import is a fresh snapshot."""
+        with self.db:
+            self.db.execute("DELETE FROM listings WHERE source = ?", (source,))
+            self._insert("listings", rows)
+
+    def mark_synced(self, kind: str) -> None:
+        """Record a COMPLETE sync of `kind`. Callers call it only after every
+        part succeeded, so a sync that dies halfway is retried, not trusted."""
+        with self.db:
+            self._set_meta(f"{kind}_synced_at", datetime.now().isoformat(timespec="seconds"))
 
     def _set_meta(self, key: str, value: str) -> None:
         self.db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))
@@ -81,9 +95,11 @@ class Store:
 
     def counts(self) -> dict:
         out = {}
-        for t in TABLES:
+        for t in ("transactions", "rentals"):
             row = self.db.execute(
                 f"SELECT COUNT(*) n, MIN(month) lo, MAX(month) hi FROM {t}").fetchone()
             out[t] = {"rows": row["n"], "from": row["lo"], "to": row["hi"],
                       "synced_at": self.meta(f"{t}_synced_at")}
+        out["listings"] = {r["source"]: r["n"] for r in self.query(
+            "SELECT source, COUNT(*) n FROM listings GROUP BY source")}
         return out

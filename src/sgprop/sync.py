@@ -53,4 +53,7 @@ def sync_rentals(store: Store, client: UraClient, quarters: int = 12,
         total += len(got)
         fetched.append(q)
         _log(f"rentals: {q} -> {len(got):,} rows")
+    # Only now, with every quarter in: a sync that raised above never gets here,
+    # so the next run retries instead of trusting a half-refreshed store.
+    store.mark_synced("rentals")
     return {"rows": total, "quarters": fetched}

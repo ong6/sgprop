@@ -5,7 +5,8 @@ automated collection in their terms. So sgprop ships no portal scraper.
 Instead it defines what a listing looks like and how a source plugs in:
 
 * **Import a file** you exported or collected yourself (CSV or JSON with the
-  ``Listing`` fields) — ``sgprop listings import FILE``.
+  ``Listing`` fields) — ``sgprop listings import FILE`` stores it, and
+  ``sgprop listings check`` prices every ask against its own format's prints.
 * **Register a plugin**: any installed package can expose an adapter under
   the ``sgprop.listings`` entry-point group. It stays in your own private
   package; sgprop only discovers and calls it.
