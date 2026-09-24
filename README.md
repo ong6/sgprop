@@ -32,9 +32,18 @@ calls: four for transactions, one per rental quarter.
 | Project coordinates | URA (SVY21), converted to lat/lon offline | with the above |
 
 `sgprop sync` checks URA's publish schedule (sales Tue/Fri, rentals the 15th,
-counted from 18:00) and does nothing if the store is already current
-(`--force` overrides). A sync that fails partway is never recorded as current. URA revises older records, so each sync
-replaces what it fetched instead of appending.
+counted from 18:00 Singapore time) and does nothing if the store is already
+current (`--force` overrides). URA revises older records, so each sync replaces
+what it fetched instead of appending. A sync that fails partway is never
+recorded as current, and a transaction batch that comes back empty or under
+half its previous size aborts the replace, keeping the old data.
+
+**How close is the export to eservice?** Checked against URA's own eservice
+download for D19 (9,997 single-unit sales): price, sqft, psf, psm, date, floor
+and sale type match on every row. Rentals match except the **sqm** band on
+some boundary units (e.g. 700–800 sqft is `60 to 70` sqm in the API, `70 to 80`
+on eservice); URA's two channels band the true area differently there. The
+**sqft** band always matches, so use that one.
 
 ## Setup
 
@@ -62,7 +71,7 @@ Data lives in `~/.cache/sgprop/sgprop.db` (`SGPROP_HOME` or `--db` to move it).
 | `sgprop comps PROJECT --sqft N --ask PRICE` | is this ask above what the format clears for? |
 | `sgprop rent PROJECT [--beds 3]` | median rent and contract count |
 | `sgprop trend PROJECT` | median psf per year |
-| `sgprop export transactions\|rentals --out DIR [--ec]` | URA-eservice-format CSVs per district, byte-compatible with the old download (`--ec` adds `*_EC.csv`) |
+| `sgprop export transactions\|rentals --out DIR [--ec]` | URA-eservice-format CSVs per district, same layout and number formats as the old download (`--ec` adds `*_EC.csv`) |
 | `sgprop listings import FILE [--source NAME]` | store your own listings (CSV/JSON); a re-import replaces that source |
 | `sgprop listings check` | every stored ask vs its own format's prints, cheapest first |
 | `sgprop listings adapters` | installed listing plugins |

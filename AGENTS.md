@@ -34,6 +34,8 @@ rental records. Use it instead of browsing portals for transaction evidence.
   `comps` defaults to Resale + Sub Sale.
 - Rentals give an area **band** and a bedroom count (non-landed only). Treat
   rent psf as approximate.
+- `lat`/`lon` are null for ~20% of transactions, mostly new launches URA has
+  no coordinates for yet. Don't treat a missing location as "far".
 - A thin cohort (fewer than about 3 prints) is not evidence. Say so, and don't
   treat a median of 2 as a price.
 

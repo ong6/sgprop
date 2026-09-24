@@ -46,7 +46,7 @@ class FakeClient:
 
     def transactions(self, batch):
         self.calls.append(("tx", batch))
-        return TX_API if batch == 1 else []
+        return TX_API if batch == 1 else [{**TX_API[0], "transaction": TX_API[0]["transaction"][:1]}]
 
     def rentals(self, q):
         self.calls.append(("rent", q))
@@ -97,10 +97,33 @@ def test_rent_evidence(store, monkeypatch):
 def test_sync_skips_when_fresh_and_replaces_when_forced(tmp_path):
     s, c = Store(tmp_path / "s.db"), FakeClient()
     out = sync_transactions(s, c, force=True)
-    assert out["rows"] == 4 and [x for x in c.calls if x[0] == "tx"] == [("tx", b) for b in (1, 2, 3, 4)]
+    assert out["rows"] == 7 and [x for x in c.calls if x[0] == "tx"] == [("tx", b) for b in (1, 2, 3, 4)]
     assert sync_transactions(s, c)["skipped"]           # just synced: nothing new published
     sync_transactions(s, c, force=True)
-    assert s.counts()["transactions"]["rows"] == 4      # replaced, not appended
+    assert s.counts()["transactions"]["rows"] == 7      # replaced, not appended
+
+
+def test_a_short_batch_aborts_the_whole_replace(tmp_path):
+    s = Store(tmp_path / "s.db")
+    sync_transactions(s, FakeClient(), force=True)
+
+    class Short(FakeClient):
+        def transactions(self, batch):
+            return [] if batch == 3 else super().transactions(batch)
+
+    with pytest.raises(RuntimeError, match="batch 3"):
+        sync_transactions(s, Short(), force=True)
+    assert s.counts()["transactions"]["rows"] == 7      # old data intact
+
+
+def test_a_narrow_rental_sync_does_not_satisfy_a_wide_one(tmp_path, monkeypatch):
+    import sgprop.sync as sync_mod
+    s, c = Store(tmp_path / "s.db"), FakeClient()
+    monkeypatch.setattr(sync_mod, "recent_quarters", lambda n: ["26q3", "26q2"][:n])
+    sync_rentals(s, c, quarters=1, force=True)
+    assert sync_rentals(s, c, quarters=1).get("skipped")
+    assert not sync_rentals(s, c, quarters=2).get("skipped")     # 26q2 never fetched
+    assert sync_rentals(s, c, quarters=2).get("skipped")
 
 
 def test_sync_rentals_replaces_only_fetched_quarters(tmp_path, monkeypatch):
@@ -182,13 +205,19 @@ def test_export_reproduces_a_real_eservice_row(tmp_path):
     assert rows["X"]["Area (SQFT)"] == "1,194.8"        # trailing zero dropped, as eservice does
 
 
-def test_psf_is_price_over_rounded_sqft_like_eservice():
-    [t] = schema.transactions_from_api([{"project": "KOVAN REGENCY", "street": "KOVAN RISE",
-        "transaction": [{"area": "83", "floorRange": "01-05", "noOfUnits": "1",
-                         "contractDate": "0526", "typeOfSale": "3", "price": "1580000",
+@pytest.mark.parametrize("project,price,sqm,sqft,psf", [
+    # Real eservice D19 rows: (price, sqm) -> the Area (SQFT) and PSF it printed.
+    ("KOVAN REGENCY", 1580000, 83, "893.41", "1,769"),
+    ("THE GARDEN RESIDENCES", 1480000, 73, "785.77", "1,883"),
+    ("RIVERFRONT RESIDENCES", 822800, 48, "516.67", "1,592"),
+])
+def test_psf_and_sqft_match_eservice(project, price, sqm, sqft, psf):
+    [t] = schema.transactions_from_api([{"project": project, "street": "S",
+        "transaction": [{"area": str(sqm), "floorRange": "01-05", "noOfUnits": "1",
+                         "contractDate": "0526", "typeOfSale": "3", "price": str(price),
                          "propertyType": "Condominium", "district": "19",
                          "typeOfArea": "Strata", "tenure": "Freehold"}]}])
-    assert t.area_sqft == 893.41 and export._money(t.psf) == "1,769"   # eservice: 893.41, 1,769
+    assert (export._sqft(t.area_sqft), export._money(t.psf)) == (sqft, psf)
     assert export._money(2.5) == "3" and export._money(1234.5) == "1,235"
 
 

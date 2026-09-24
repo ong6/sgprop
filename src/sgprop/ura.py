@@ -18,6 +18,7 @@ import urllib.error
 import urllib.request
 from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from . import config
 
@@ -58,7 +59,7 @@ def _get_json(url: str, headers: dict, timeout: float = 120, retries: int = 3) -
 
 def recent_quarters(n: int, today: date | None = None) -> list[str]:
     """The last `n` quarters, newest first, current quarter included."""
-    today = today or date.today()
+    today = today or now_sgt().date()
     y, q = today.year, (today.month - 1) // 3 + 1
     out = []
     for _ in range(n):
@@ -139,6 +140,13 @@ class UraClient:
 # the next sync after it re-fetches. Errs toward re-syncing, never toward
 # believing a pre-publish sync is fresh.
 PUBLISH_HOUR = 18
+SGT = ZoneInfo("Asia/Singapore")
+
+
+def now_sgt() -> datetime:
+    """Singapore wall-clock time, naive — URA's schedule is in SGT whatever
+    timezone this machine runs in."""
+    return datetime.now(SGT).replace(tzinfo=None)
 
 
 def last_publish(kind: str, now: datetime | None = None) -> datetime:
@@ -146,7 +154,7 @@ def last_publish(kind: str, now: datetime | None = None) -> datetime:
 
     A sync is current only if it ran after this moment.
     """
-    now = now or datetime.now()
+    now = now or now_sgt()
     at = now.replace(hour=PUBLISH_HOUR, minute=0, second=0, microsecond=0)
     if kind == "transactions":
         for back in range(8):

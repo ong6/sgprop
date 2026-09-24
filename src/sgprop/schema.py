@@ -125,9 +125,10 @@ def transactions_from_api(result: list[dict]) -> list[Transaction]:
             if not sqm or not price:
                 continue
             units = int(_num(t.get("noOfUnits")) or 1)
-            # Rounded first, as URA does: eservice psf is price / the 2-dp sqft
-            # it prints (KOVAN REGENCY 83 sqm $1.58M -> 893.41 sqft -> $1,769).
-            sqft = round(sqm * SQFT_PER_SQM, 2)
+            # psf from the UNROUNDED area, kept at full precision and rounded
+            # half-up only on export: matches all 9,997 single-unit D19
+            # eservice rows (dividing by the 2-dp sqft matched 9,946).
+            sqft = sqm * SQFT_PER_SQM
             freehold, years, start = parse_tenure(t.get("tenure", ""))
             floor = t.get("floorRange")
             out.append(Transaction(
@@ -142,7 +143,7 @@ def transactions_from_api(result: list[dict]) -> list[Transaction]:
                 price=price,
                 nett_price=_num(t.get("nettPrice")),
                 area_sqm=sqm,
-                area_sqft=sqft,
+                area_sqft=round(sqft, 2),
                 # A bulk purchase reports total price and total area, so psf
                 # is still price / area.
                 psf=price / sqft,         # unrounded; export rounds half-up like URA

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import fields
-from datetime import datetime
 from pathlib import Path
 
 from . import config
@@ -62,7 +61,6 @@ class Store:
         with self.db:
             self.db.execute("DELETE FROM transactions")
             self._insert("transactions", rows)
-            self._set_meta("transactions_synced_at", datetime.now().isoformat(timespec="seconds"))
 
     def replace_rentals(self, months: set[str], rows: list[Rental]) -> None:
         """Replace the rental rows for the given months (the quarters fetched)."""
@@ -76,11 +74,15 @@ class Store:
             self.db.execute("DELETE FROM listings WHERE source = ?", (source,))
             self._insert("listings", rows)
 
-    def mark_synced(self, kind: str) -> None:
+    def mark_synced(self, kind: str, **extra: str) -> None:
         """Record a COMPLETE sync of `kind`. Callers call it only after every
-        part succeeded, so a sync that dies halfway is retried, not trusted."""
+        part succeeded, so a sync that dies halfway is retried, not trusted.
+        `extra` lands in meta as `{kind}_{key}` (e.g. the quarters covered)."""
+        from .ura import now_sgt
         with self.db:
-            self._set_meta(f"{kind}_synced_at", datetime.now().isoformat(timespec="seconds"))
+            self._set_meta(f"{kind}_synced_at", now_sgt().isoformat(timespec="seconds"))
+            for k, v in extra.items():
+                self._set_meta(f"{kind}_{k}", v)
 
     def _set_meta(self, key: str, value: str) -> None:
         self.db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))
