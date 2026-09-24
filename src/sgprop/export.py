@@ -64,20 +64,37 @@ def transactions_csv(store: Store, district: int, path: Path,
     return len(rows)
 
 
-def rentals_csv(store: Store, district: int, path: Path) -> int:
+# The eservice rental search is non-landed only, spelled with a capital L.
+NON_LANDED = ("Non-landed Properties",)
+_RENT_TYPE_LABEL = {"Non-landed Properties": "Non-Landed Properties"}
+
+
+def _band(band: str | None) -> str:
+    """'1000-1100' -> '1,000 to 1,100', as eservice writes it."""
+    lo, sep, hi = (band or "").partition("-")
+    if not sep or not lo.strip().isdigit() or not hi.strip().isdigit():
+        return (band or "").replace("-", " to ")
+    return f"{int(lo):,} to {int(hi):,}"
+
+
+def rentals_csv(store: Store, district: int, path: Path,
+                property_types: tuple[str, ...] = NON_LANDED) -> int:
     rows = store.query(
-        "SELECT * FROM rentals WHERE district = ? ORDER BY month DESC", (district,))
+        "SELECT * FROM rentals WHERE district = ? AND property_type IN (%s) "
+        "ORDER BY month DESC" % ",".join("?" * len(property_types)),
+        (district, *property_types))
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(RENT_HEADER)
         for r in rows:
             w.writerow([
-                r["project"], r["street"], r["district"], r["property_type"],
+                r["project"], r["street"], r["district"],
+                _RENT_TYPE_LABEL.get(r["property_type"], r["property_type"]),
                 r["bedrooms"] if r["bedrooms"] is not None else "NA",
                 _money(r["rent"]),
-                (r["area_sqm_band"] or "").replace("-", " to "),
-                (r["area_sqft_band"] or "").replace("-", " to "),
+                _band(r["area_sqm_band"]),
+                _band(r["area_sqft_band"]),
                 _mon(r["month"]),
             ])
     return len(rows)

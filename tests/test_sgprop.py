@@ -143,3 +143,12 @@ def test_cli_comps_json(store, capsys, monkeypatch):
     monkeypatch.setattr(analysis, "_months_ago", lambda n, today=None: "2024-09")
     assert cli.main(["--db", str(store.path), "comps", "LIVIA", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["prints"] == 3
+
+
+def test_rental_export_matches_eservice(store, tmp_path):
+    p = tmp_path / "ura_rental_D18.csv"
+    assert export.rentals_csv(store, 18, p) == 2
+    with open(p) as f:
+        r = next(csv.DictReader(f))
+    assert r["Property Type"] == "Non-Landed Properties"
+    assert r["Floor Area (SQFT)"] == "1,500 to 1,600" and r["Lease Commencement Date"] == "Aug-26"
